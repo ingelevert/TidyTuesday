@@ -143,3 +143,44 @@ plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Qua
 plt.close()
 
 print("Rainfall vs enterococci scatter plot created successfully.")
+
+
+
+
+
+
+# Water quality by region ---------------------------------------------------------------------------------
+
+
+# First, calculate the percentage of samples in each quality category by region
+region_quality = pd.crosstab(
+    Water_Quality_clean['region'], 
+    Water_Quality_clean['quality_category'],
+    normalize='index'
+) * 100
+
+# Create a stacked bar chart
+plt.figure(figsize=(16, 8))
+region_quality.plot(kind='bar', stacked=True, 
+                   colormap='RdYlGn_r')  # Red-Yellow-Green color scheme (reversed)
+
+plt.title('Water Quality by Sydney Region', fontsize=14)
+plt.xlabel('Region', fontsize=12)
+plt.ylabel('Percentage of Samples (%)', fontsize=12)
+plt.xticks(rotation=45, ha='right')
+plt.legend(title='Quality Category')
+plt.grid(axis='y', linestyle='--', alpha=0.7)
+plt.tight_layout()
+
+# Add value labels on the bars
+for i, region in enumerate(region_quality.index):
+    cumulative = 0
+    for category in region_quality.columns:
+        value = region_quality.loc[region, category]
+        if value > 5:  # Only show labels if segment is large enough
+            plt.text(i, cumulative + value/2, f'{value:.1f}%', 
+                    ha='center', va='center', fontweight='bold')
+        cumulative += value
+
+plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025')
+plt.close()
