@@ -1,11 +1,11 @@
 import pandas as pd
 import numpy as np
-from datetime import datetime
 import matplotlib.pyplot as plt
 import seaborn as sns
+import folium
+from folium.plugins import MarkerCluster
+from datetime import datetime, timedelta
 import os
-from matplotlib.lines import Line2D
-
 
 # Load the dataset and clean it
 Water_Quality = pd.read_csv("/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/water_quality.csv")
@@ -69,118 +69,74 @@ merged_data = pd.merge(
     how='left'
 )
 
-# Analyze and visualize -------------------------------------------------------------------------------------------------
+# ---- Data analysis --------------------------------------------------------------------------------------------------------------------
 
-# Style
+# Firstly, lets make a nice matplotlib default style
+# Set up a nicer matplotlib default for LinkedIn-worthy charts
 plt.style.use('seaborn-v0_8-whitegrid')
-sns.set_palette("viridis")
+plt.rcParams.update({
+    'figure.figsize': (12, 6),
+    'axes.titlesize': 18,
+    'axes.labelsize': 14,
+    'xtick.labelsize': 12,
+    'ytick.labelsize': 12,
+    'lines.linewidth': 2,
+    'lines.markersize': 8,
+    'axes.grid': True,
+    'grid.alpha': 0.3,
+    'axes.spines.top': False,
+    'axes.spines.right': False,
+    'figure.dpi': 100
+})
 
-# 1. Distribution of enterococci levels (log)
-plt.figure(figsize=(10, 6))
-plt.hist(np.log1p(Water_Quality_clean['enterococci_cfu_100ml'].dropna()), bins=30)
-plt.title('Distribution of Enterococci Levels (log)')
-plt.xlabel('log(enterococci CFU/100ml + 1)')
-plt.ylabel('Frequency')
-plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/enterococci_distribution.png')
-plt.close()
+print("Analyzing the data...")
 
+# Lets do the analysis by Region: Water Quality Categories
 
-# 2. Scatterplot enterococci vs. rainfall
-plt.figure(figsize=(12, 8))
+def analyze_quality_by_region(df):
+    # Count quality categories by region
+    quality_by_region = pd.crosstab(
+        df['region'], 
+        df['quality_category'],
+        normalize='index'
+    ) * 100
+    # Create stacked bar chart
+    fig, ax = plt.subplots(figsize=(12, 7))
+    quality_by_region.plot(
+        kind='bar', 
+        stacked=True,
+        ax=ax,
+        color=['#1b9e77', '#d95f02', '#7570b3'],  # Colorblind-friendly palette
+        width=0.7
+    )
+    for i, region in enumerate(quality_by_region.index):
+        cumulative = 0
+        for quality, percentage in quality_by_region.loc[region].items():
+            if percentage > 5:  # Only label if sufficient space
+                ax.text(
+                    i, 
+                    cumulative + percentage/2, 
+                    f"{percentage:.0f}%", 
+                    ha='center',
+                    va='center',
+                    fontweight='bold',
+                    color='white' if quality != 'Good' else 'black'
+                )
+            cumulative += percentage
+    
+    ax.set_title('Water Quality by Region in Sydney')
+    ax.set_xlabel('Region')
+    ax.set_ylabel('Percentage')
+    ax.set_ylim(0, 100)
+    ax.legend(title='Water Quality', bbox_to_anchor=(1, 1))
+    plt.xticks(rotation=45, ha='right')
+    plt.tight_layout()
+    plt.savefig("/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/Graphs/quality_by_region.png", dpi=300)
+    plt.close()
 
-# Create scatter plot iwht points colored by the quality category made earlier
-scatter = plt.scatter(
-    merged_data['precipitation_mm'],
-    merged_data['enterococci_cfu_100ml'],
-    c=merged_data['quality_category'].map({'Good': 0, 'Fair': 1, 'Poor': 2}),
-    cmap='RdYlGn_r', #RYG colormap (reversed)
-    alpha=0.5,
-    s=30, # size of the points
-    edgecolor='none'
-)
+    return quality_by_region
 
-# Add log sclae for y-axis
-plt.yscale('log')
+# Call the water quality by region analysis function
+quality_results = analyze_quality_by_region(Water_Quality_clean)
+print("Water quality analysis by region completed.")
 
-# Reference lines for water quality thresholds
-plt.axhline(y=40, color='green', linestyle='--', alpha=0.7, label='Good threshold (40 CFU)')
-plt.axhline(y=200, color='red', linestyle='--', alpha=0.7, label='Poor threshold (200 CFU)')
-
-# Custom legend
-legend_elements = [
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='green', markersize=10, label='Good'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='yellow', markersize=10, label='Fair'),
-    Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=10, label='Poor')
-]
-plt.legend(handles=legend_elements, title='Water Quality Category')
-
-# Add a trend line with numpy polyfit
-valid_data = merged_data.dropna(subset=['precipitation_mm', 'enterococci_cfu_100ml'])
-x = valid_data['precipitation_mm']
-y = np.log10(valid_data['enterococci_cfu_100ml'] + 1)
-
-if len(valid_data) > 10:
-    coeffs = np.polyfit(x, y, 1)
-    polynomial = np.poly1d(coeffs)
-    x_trend = np.linspace(0, merged_data['precipitation_mm'].max(), 100)
-    y_trend = 10 ** polynomial(x_trend) - 1
-
-    # Plot the trend line
-    plt.plot(x_trend, y_trend, color='blue', linestyle='-', lw=2,
-             label=f'Trend (y) ∝ 10^{coeffs[0]:.4f}x)')
-    plt.legend()
-
-# add text showing correlation value
-if len(valid_data) > 10:
-    correlation = merged_data['precipitation_mm'].corr(np.log10(merged_data['enterococci_cfu_100ml'] + 1))
-    plt.text(0.05, 0.95, f"Correlation: {correlation:.3f}", 
-             transform=plt.gca().transAxes, fontsize=12, 
-             bbox=dict(facecolor='white', alpha=0.7))
-
-plt.tight_layout()
-
-plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/enterococci_vs_rainfall.png')
-plt.close()
-
-print("Rainfall vs enterococci scatter plot created successfully.")
-
-
-
-
-
-
-# Water quality by region ---------------------------------------------------------------------------------
-
-
-# First, calculate the percentage of samples in each quality category by region
-region_quality = pd.crosstab(
-    Water_Quality_clean['region'], 
-    Water_Quality_clean['quality_category'],
-    normalize='index'
-) * 100
-
-# Create a stacked bar chart
-plt.figure(figsize=(16, 8))
-region_quality.plot(kind='bar', stacked=True, 
-                   colormap='RdYlGn_r')  # Red-Yellow-Green color scheme (reversed)
-
-plt.title('Water Quality by Sydney Region', fontsize=14)
-plt.xlabel('Region', fontsize=12)
-plt.ylabel('Percentage of Samples (%)', fontsize=12)
-plt.xticks(rotation=45, ha='right')
-plt.legend(title='Quality Category')
-plt.grid(axis='y', linestyle='--', alpha=0.7)
-plt.tight_layout()
-
-# Add value labels on the bars
-for i, region in enumerate(region_quality.index):
-    cumulative = 0
-    for category in region_quality.columns:
-        value = region_quality.loc[region, category]
-        if value > 5:  # Only show labels if segment is large enough
-            plt.text(i, cumulative + value/2, f'{value:.1f}%', 
-                    ha='center', va='center', fontweight='bold')
-        cumulative += value
-
-plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025')
-plt.close()
