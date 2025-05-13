@@ -1,6 +1,9 @@
 import pandas as pd
 import numpy as np
 from datetime import datetime
+import matplotlib.pyplot as plt
+import seaborn as sns
+import os
 
 # Load the dataset and clean it
 Water_Quality = pd.read_csv("/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/water_quality.csv")
@@ -66,4 +69,16 @@ merged_data = pd.merge(
 
 # Analyze and visualize -------------------------------------------------------------------------------------------------
 
+# Style
+plt.style.use('seaborn-v0_8-whitegrid')
+sns.set_palette("viridis")
+
+# 1. Distribution of enterococci levels (log)
+plt.figure(figsize=(10, 6))
+plt.hist(np.log1p(Water_Quality_clean['enterococci_cfu_100ml'].dropna()), bins=30)
+plt.title('Distribution of Enterococci Levels (log)')
+plt.xlabel('log(enterococci CFU/100ml + 1)')
+plt.ylabel('Frequency')
+plt.savefig('/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/enterococci_distribution.png')
+plt.close()
 
