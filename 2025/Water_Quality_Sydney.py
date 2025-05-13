@@ -144,75 +144,92 @@ print("Water quality analysis by region completed.")
 
 #Rainfall vs Bacteria (Enterococci)
 
-def analyze_rainfall_effect(df):
+def analyze_rainfall_effect_improved(df):
+    # Use the same data preparation as before
     data = df.copy()
     data['log_enterococci'] = np.log1p(data['enterococci_cfu_100ml'])
     data = data.dropna(subset=['log_enterococci', 'precipitation_mm'])
-
-    try:
-        m, b = np.polyfit(data['precipitation_mm'], data['log_enterococci'], 1)
-        fit_valid = True
-    except:
-        fit_valid = False
-        m, b = 0, 0
-
-    # Create scatter plot
-    fig, ax = plt.subplots(figsize=(10, 6))
-    sns.scatterplot(
-        data=data,
-        x='precipitation_mm',
-        y='log_enterococci',
-        hue='region',
-        alpha=0.6,
-        ax=ax
-    )
-
-# We will add a regression line if the fit is valid
-    if fit_valid:
-        x_range = np.linspace(0, data['precipitation_mm'].max(), 100)
-        y_pred = m * x_range + b
-        ax.plot(x_range, y_pred, 'r-', linewidth=2, 
-                label=f'y = {m:.3f}x + {b:.2f}')
-        # Calculate correlation coefficient
-        corr = np.corrcoef(data['precipitation_mm'], data['log_enterococci'])[0, 1]
-        ax.text(0.05, 0.95, f'Correlation: {corr:.3f}', transform=ax.transAxes,
-                fontsize=12, bbox=dict(facecolor='white', alpha=0.7))
     
-    ax.set_title('Rainfall vs. Enterococci Levels')
-    ax.set_xlabel('Precipitation (mm)')
-    ax.set_ylabel('Log(Enterococci CFU/100ml + 1)')
-    
-    # Move legend outside plot area
-    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
-    plt.tight_layout()
-    plt.savefig("2025/Week_20_Water_Quality_Sydney/Graphs/enterococci_vs_rainfall.png", dpi=300)
-    plt.close()
-    
-    # Analyze rainfall effect with categories
     # Group rainfall into categories
     bins = [-1, 0, 5, 15, float('inf')]
-    labels = ['None', 'Light (0-5mm)', 'Moderate (5-15mm)', 'Heavy (>15mm)']
+    labels = ['None (0 mm)', 'Light (0-5 mm)', 'Moderate (5-15 mm)', 'Heavy (>15 mm)']
     data['rain_category'] = pd.cut(data['precipitation_mm'], bins=bins, labels=labels)
     
-    # Boxplot of enterococci by rain category
-    plt.figure(figsize=(12, 7))
-    sns.boxplot(
+    # Calculate sample sizes and median values for each category
+    category_stats = data.groupby('rain_category').agg(
+        sample_size=('enterococci_cfu_100ml', 'count'),
+        median=('enterococci_cfu_100ml', 'median')
+    )
+    
+    # Enhanced boxplot with improvements
+    plt.figure(figsize=(14, 8))
+    
+    # Create boxplot with color-blind friendly palette
+    ax = sns.boxplot(
         data=data,
         x='rain_category', 
         y='enterococci_cfu_100ml',
-        palette='viridis'
+        palette=["#5154a4", "#56a8cb", "#5dc863", "#cae931"],  # Color-blind friendly blue-green gradient
+        width=0.6,
+        showfliers=True,  # Show outliers
+        flierprops={'marker':'o', 'markersize':3, 'alpha':0.5}  # Smaller, semi-transparent outliers
     )
+    
+    # Add sample size to each category
+    for i, (category, stats) in enumerate(category_stats.iterrows()):
+        ax.text(i, data['enterococci_cfu_100ml'].min() / 2, 
+                f"n={stats['sample_size']}", 
+                ha='center', color='black', fontsize=10)
+    
+    # Connect median points with a line to emphasize trend
+    median_line_data = []
+    for i, (category, stats) in enumerate(category_stats.iterrows()):
+        median_line_data.append((i, stats['median']))
+    
+    xs, ys = zip(*median_line_data)
+    plt.plot(xs, ys, 'r--', linewidth=2, alpha=0.7, label='Median trend')
+    
+    # Add arrow showing the increase
+    first_median = category_stats.iloc[0]['median']
+    last_median = category_stats.iloc[-1]['median']
+    increase_factor = last_median / first_median
+    
+    plt.annotate(
+        f"~{increase_factor:.1f}× increase in median\nwith heavy rainfall", 
+        xy=(3, last_median), 
+        xytext=(2, last_median * 3),
+        arrowprops=dict(facecolor='black', shrink=0.05, width=1.5),
+        fontsize=12,
+        bbox=dict(facecolor='white', alpha=0.8)
+    )
+    
+    # Add water quality thresholds
+    plt.axhline(y=40, color='green', linestyle='-', alpha=0.5, label='Good threshold (40 CFU)')
+    plt.axhline(y=200, color='red', linestyle='-', alpha=0.5, label='Poor threshold (200 CFU)')
+    plt.fill_between([-0.5, 3.5], 0, 40, color='green', alpha=0.1)
+    plt.fill_between([-0.5, 3.5], 40, 200, color='yellow', alpha=0.1)
+    plt.fill_between([-0.5, 3.5], 200, data['enterococci_cfu_100ml'].max(), color='red', alpha=0.1)
+    
+    # Improve y-axis tick labels
     plt.yscale('log')
-    plt.title('Enterococci Levels by Rainfall Category')
-    plt.xlabel('Rainfall Category')
-    plt.ylabel('Enterococci (CFU/100ml) - Log Scale')
-    plt.grid(True, alpha=0.3)
+    plt.yticks([1, 10, 40, 100, 200, 1000, 10000, 100000], 
+              ['1', '10', '40\n(Good)', '100', '200\n(Poor)', '1,000', '10,000', '100,000'])
+    
+    # Add labels and title
+    plt.title('Impact of Rainfall on Beach Water Quality', fontsize=20)
+    plt.xlabel('Rainfall Category', fontsize=16)
+    plt.ylabel('Enterococci (CFU/100ml) - Log Scale', fontsize=16)
+    
+    # Adjust grid to be lighter
+    plt.grid(True, alpha=0.2)
+    plt.legend(loc='upper left')
+    
     plt.tight_layout()
-    plt.savefig("/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/Graphs/enterococci_by_rain_category.png", dpi=300)
+    plt.savefig("2025/Week_20_Water_Quality_Sydney/Graphs/enterococci_by_rain_improved.png", dpi=300)
     plt.close()
-    print("Rainfall effect analysis completed.")
+    
+    print("Enhanced rainfall effect analysis completed.")
     return data
 
-# Call the rainfall analysis function
-analyze_rainfall_effect(merged_data)
-print("Rainfall effect analysis completed.")
+# Call the improved function
+analyze_rainfall_effect_improved(merged_data)
