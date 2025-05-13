@@ -140,3 +140,79 @@ def analyze_quality_by_region(df):
 quality_results = analyze_quality_by_region(Water_Quality_clean)
 print("Water quality analysis by region completed.")
 
+#------------------------------------------------------------------------------------------
+
+#Rainfall vs Bacteria (Enterococci)
+
+def analyze_rainfall_effect(df):
+    data = df.copy()
+    data['log_enterococci'] = np.log1p(data['enterococci_cfu_100ml'])
+    data = data.dropna(subset=['log_enterococci', 'precipitation_mm'])
+
+    try:
+        m, b = np.polyfit(data['precipitation_mm'], data['log_enterococci'], 1)
+        fit_valid = True
+    except:
+        fit_valid = False
+        m, b = 0, 0
+
+    # Create scatter plot
+    fig, ax = plt.subplots(figsize=(10, 6))
+    sns.scatterplot(
+        data=data,
+        x='precipitation_mm',
+        y='log_enterococci',
+        hue='region',
+        alpha=0.6,
+        ax=ax
+    )
+
+# We will add a regression line if the fit is valid
+    if fit_valid:
+        x_range = np.linspace(0, data['precipitation_mm'].max(), 100)
+        y_pred = m * x_range + b
+        ax.plot(x_range, y_pred, 'r-', linewidth=2, 
+                label=f'y = {m:.3f}x + {b:.2f}')
+        # Calculate correlation coefficient
+        corr = np.corrcoef(data['precipitation_mm'], data['log_enterococci'])[0, 1]
+        ax.text(0.05, 0.95, f'Correlation: {corr:.3f}', transform=ax.transAxes,
+                fontsize=12, bbox=dict(facecolor='white', alpha=0.7))
+    
+    ax.set_title('Rainfall vs. Enterococci Levels')
+    ax.set_xlabel('Precipitation (mm)')
+    ax.set_ylabel('Log(Enterococci CFU/100ml + 1)')
+    
+    # Move legend outside plot area
+    plt.legend(bbox_to_anchor=(1.05, 1), loc='upper left')
+    plt.tight_layout()
+    plt.savefig("2025/Week_20_Water_Quality_Sydney/Graphs/enterococci_vs_rainfall.png", dpi=300)
+    plt.close()
+    
+    # Analyze rainfall effect with categories
+    # Group rainfall into categories
+    bins = [-1, 0, 5, 15, float('inf')]
+    labels = ['None', 'Light (0-5mm)', 'Moderate (5-15mm)', 'Heavy (>15mm)']
+    data['rain_category'] = pd.cut(data['precipitation_mm'], bins=bins, labels=labels)
+    
+    # Boxplot of enterococci by rain category
+    plt.figure(figsize=(12, 7))
+    sns.boxplot(
+        data=data,
+        x='rain_category', 
+        y='enterococci_cfu_100ml',
+        palette='viridis'
+    )
+    plt.yscale('log')
+    plt.title('Enterococci Levels by Rainfall Category')
+    plt.xlabel('Rainfall Category')
+    plt.ylabel('Enterococci (CFU/100ml) - Log Scale')
+    plt.grid(True, alpha=0.3)
+    plt.tight_layout()
+    plt.savefig("/Users/levilina/Documents/Coding/TidyTuesday/2025/Week_20_Water_Quality_Sydney/Graphs/enterococci_by_rain_category.png", dpi=300)
+    plt.close()
+    print("Rainfall effect analysis completed.")
+    return data
+
+# Call the rainfall analysis function
+analyze_rainfall_effect(merged_data)
+print("Rainfall effect analysis completed.")
